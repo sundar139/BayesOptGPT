@@ -6,7 +6,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .serving.config import ServingConfig, load_serving_config, resolve_serving_config_path
 from .serving.runtime import PredictionRecord, ServingRuntime, ServingStartupError
@@ -25,6 +25,18 @@ class PredictRequest(BaseModel):
     """Single-inference request payload."""
 
     input: str | StructuredInput
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_text_payload(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        if "input" in data or "text" not in data:
+            return data
+
+        if "id" in data:
+            return {"input": {"text": data["text"], "id": data["id"]}}
+        return {"input": data["text"]}
 
 
 class PredictBatchRequest(BaseModel):

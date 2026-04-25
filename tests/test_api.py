@@ -198,6 +198,33 @@ def test_predict_single_structured_input_preserves_id() -> None:
     assert payload["calibrated"] is False
 
 
+def test_predict_single_legacy_text_payload() -> None:
+    config, runtime = _build_runtime(calibration_temperature=1.1)
+    app = create_app(serving_config=config, runtime=runtime)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/predict",
+            json={"text": "Global market update"},
+        )
+    assert response.status_code == 200
+
+
+def test_predict_single_legacy_text_payload_preserves_id() -> None:
+    config, runtime = _build_runtime(calibration_temperature=None)
+    app = create_app(serving_config=config, runtime=runtime)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/predict",
+            json={"id": "record-legacy", "text": "Sports headline"},
+        )
+    assert response.status_code == 200
+
+    payload = response.json()["prediction"]
+    assert payload["input_id"] == "record-legacy"
+
+
 def test_predict_batch_returns_structured_predictions() -> None:
     config, runtime = _build_runtime(max_batch_size=4)
     app = create_app(serving_config=config, runtime=runtime)

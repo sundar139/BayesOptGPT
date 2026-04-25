@@ -51,7 +51,7 @@ Exposes safe metadata:
 
 ### `POST /predict`
 
-Accepts a single item:
+Accepts a single item (preferred canonical form):
 
 ```json
 {
@@ -67,6 +67,21 @@ or structured payload:
     "id": "record-1",
     "text": "Global market update"
   }
+}
+```
+
+Backward-compatible shorthand is also accepted:
+
+```json
+{
+  "text": "Global market update"
+}
+```
+
+```json
+{
+  "id": "record-1",
+  "text": "Global market update"
 }
 ```
 

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from html import escape
+from importlib import import_module
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +22,16 @@ from bayes_gp_llmops.dashboard import (
     uncertainty_summary,
 )
 
+KPI_SPECS: tuple[tuple[str, str], ...] = (
+    ("accuracy", "Accuracy"),
+    ("macro_f1", "Macro F1"),
+    ("nll", "NLL"),
+    ("brier_score", "Brier Score"),
+    ("ece", "ECE"),
+)
+PERCENT_METRIC_KEYS = {"accuracy", "macro_f1"}
+INVERSE_DELTA_KEYS = {"nll", "brier_score", "ece"}
+
 
 def main() -> None:
     config = DashboardConfig.from_env()
@@ -28,8 +41,8 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    st.title(config.title)
-    st.caption(config.subtitle)
+    _inject_theme_css()
+    _render_header_banner(config)
 
     evaluation_dir, bundle_dir, api_base_url = _render_sidebar(config)
     dashboard_data = load_dashboard_data(
@@ -62,7 +75,7 @@ def main() -> None:
             test_calibrated=dashboard_data.metrics_test_calibrated,
         )
     with tabs[2]:
-        _render_visualizations(dashboard_data.image_paths)
+        _render_visualizations(dashboard_data.image_paths, dashboard_data.metrics_test)
     with tabs[3]:
         _render_calibration_and_uncertainty(
             dashboard_data.metrics_validation,
@@ -115,34 +128,61 @@ def _render_overview(
     test_metrics: dict[str, object] | None,
 ) -> None:
     st.subheader("Full-Split KPI Overview")
-    _render_kpi_cards("Validation", validation_metrics)
-    _render_kpi_cards("Test", test_metrics)
-    st.info(
-        "Full-split performance is strong, calibration is stable across validation and test, "
-        "and Business/Sci-Tech remains the most confusable category pair."
+    validation_column, test_column = st.columns(2, gap="large")
+    with validation_column:
+        _render_split_heading(label="Validation Split", accent_color="#60a5fa")
+        _render_kpi_cards(metrics=validation_metrics)
+
+    with test_column:
+        _render_split_heading(label="Test Split", accent_color="#34d399")
+        _render_kpi_cards(metrics=test_metrics, baseline_metrics=validation_metrics)
+
+    _try_style_metric_cards()
+
+    st.markdown(
+        """
+<div style="background: linear-gradient(135deg, #0d2137, #1a3a5c);
+            border-left: 4px solid #60a5fa; border-radius: 10px;
+            padding: 18px 24px; margin-top: 16px;">
+  <p style="color: #93c5fd; font-size: 0.95rem; margin: 0; line-height: 1.6;">
+    Full-split performance is strong. Calibration remains stable across validation and test.
+    Business/Sci-Tech is still the most confusable category pair.
+  </p>
+</div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
 def _render_kpi_cards(
-    split_name: str,
+    *,
     metrics: dict[str, object] | None,
+    baseline_metrics: dict[str, object] | None = None,
 ) -> None:
-    st.markdown(f"**{split_name}**")
-    keys = (
-        ("accuracy", "Accuracy"),
-        ("macro_f1", "Macro F1"),
-        ("nll", "NLL"),
-        ("brier_score", "Brier Score"),
-        ("ece", "ECE"),
-    )
-    columns = st.columns(len(keys))
-    for index, (key, label) in enumerate(keys):
-        value = metric_number(metrics, key)
-        with columns[index]:
-            if value is None:
-                st.metric(label, "N/A")
-            else:
-                st.metric(label, f"{value:.6f}")
+    row_slices = (KPI_SPECS[:3], KPI_SPECS[3:])
+    for row_slice in row_slices:
+        columns = st.columns(len(row_slice))
+        for index, (key, label) in enumerate(row_slice):
+            value = metric_number(metrics, key)
+            baseline_value = metric_number(baseline_metrics, key)
+            with columns[index]:
+                if value is None:
+                    st.metric(label, "N/A")
+                    continue
+
+                formatted_value = _format_kpi_value(key, value)
+                delta = _format_delta_badge(key, value, baseline_value)
+                if delta is None:
+                    st.metric(label, formatted_value)
+                    continue
+
+                delta_color = "inverse" if key in INVERSE_DELTA_KEYS else "normal"
+                st.metric(
+                    label,
+                    formatted_value,
+                    delta=delta,
+                    delta_color=delta_color,
+                )
 
 
 def _render_results(
@@ -210,7 +250,10 @@ def _render_results(
         st.caption("Test calibrated metrics were not found.")
 
 
-def _render_visualizations(image_paths: dict[str, Path | None]) -> None:
+def _render_visualizations(
+    image_paths: dict[str, Path | None],
+    test_metrics: dict[str, object] | None,
+) -> None:
     st.subheader("Visualizations")
     figures = (
         ("Confusion Matrix", "confusion_matrix"),
@@ -229,6 +272,9 @@ def _render_visualizations(image_paths: dict[str, Path | None]) -> None:
                 st.warning(f"{title} image is not available.")
             else:
                 st.image(str(path), use_container_width=True)
+
+    st.markdown("---")
+    _render_kpi_gauges(test_metrics)
 
 
 def _render_calibration_and_uncertainty(
@@ -358,12 +404,16 @@ def _render_metadata(
     champion_manifest: dict[str, object] | None,
 ) -> None:
     st.subheader("Model Metadata")
+    workspace_root = Path(__file__).resolve().parent
+    display_evaluation_dir = _to_relative_display_path(evaluation_dir, root=workspace_root)
+    display_bundle_dir = _to_relative_display_path(bundle_dir, root=workspace_root)
+
     st.markdown("**Artifact paths**")
     st.code(
         "\n".join(
             [
-                f"evaluation_dir={evaluation_dir}",
-                f"bundle_dir={bundle_dir}",
+                f"evaluation_dir={display_evaluation_dir}",
+                f"bundle_dir={display_bundle_dir}",
             ]
         )
     )
@@ -372,13 +422,13 @@ def _render_metadata(
     if bundle_metadata is None:
         st.info("bundle_metadata.json is not available.")
     else:
-        st.json(bundle_metadata)
+        st.json(_sanitize_metadata_payload(bundle_metadata, root=workspace_root))
 
     st.markdown("**Champion manifest**")
     if champion_manifest is None:
         st.info("champion_manifest.json is not available.")
     else:
-        st.json(champion_manifest)
+        st.json(_sanitize_metadata_payload(champion_manifest, root=workspace_root))
 
     st.markdown("**Serving metadata (optional)**")
     if api_base_url is None:
@@ -387,7 +437,7 @@ def _render_metadata(
         if st.button("Fetch /metadata", use_container_width=False):
             try:
                 metadata = fetch_serving_metadata(api_base_url=api_base_url)
-                st.json(metadata)
+                st.json(_sanitize_metadata_payload(metadata, root=workspace_root))
             except (ValueError, RuntimeError) as exc:
                 st.error(str(exc))
 
@@ -426,6 +476,266 @@ def _format_int_metric(value: float | None) -> str:
     if value is None:
         return "N/A"
     return f"{int(value)}"
+
+
+def _inject_theme_css() -> None:
+    st.markdown(
+        """
+<style>
+.stApp {
+    background: radial-gradient(ellipse at top left, #0d1b2a 0%, #0a0f1e 60%, #06080f 100%);
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0d1b2a 0%, #0a1628 100%);
+    border-right: 1px solid #1e3a5f;
+}
+[data-testid="stSidebar"] * {
+    color: #94b8d8 !important;
+}
+[data-testid="stTabs"] button {
+    color: #64748b !important;
+    font-weight: 500;
+    border-bottom: 2px solid transparent !important;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #a78bfa !important;
+    border-bottom: 2px solid #a78bfa !important;
+}
+[data-testid="metric-container"] {
+    background: linear-gradient(135deg, #0f1f35 0%, #0d1828 100%);
+    border: 1px solid #1e3d6e;
+    border-top: 2px solid #7c3aed;
+    border-radius: 14px;
+    padding: 20px 16px;
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.08), 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+[data-testid="stMetricValue"] {
+    color: #e2e8f0 !important;
+    font-size: 1.4rem !important;
+    font-weight: 700;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 0.75rem !important;
+}
+h1, h2, h3 {
+    color: #cbd5e1 !important;
+}
+[data-testid="stInfo"] {
+    background: linear-gradient(135deg, #0d1f35, #0f2540) !important;
+    border: 1px solid #1e4a7f !important;
+    border-left: 4px solid #60a5fa !important;
+    border-radius: 12px !important;
+    color: #93c5fd !important;
+}
+[data-testid="stSuccess"] {
+    background: linear-gradient(135deg, #052e16, #064e3b) !important;
+    border-left: 4px solid #34d399 !important;
+    border-radius: 10px !important;
+}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_header_banner(config: DashboardConfig) -> None:
+    st.markdown(
+        f"""
+<div style="background: linear-gradient(135deg, #0d1b2a 0%, #130a2e 50%, #0d1b2a 100%);
+            border: 1px solid #1e3a5f; border-left: 4px solid #60a5fa;
+            border-radius: 16px; padding: 28px 36px; margin-bottom: 24px;">
+  <p style="color: #7c3aed; font-size: 0.75rem; letter-spacing: 0.15em;
+            text-transform: uppercase; margin: 0 0 8px 0; font-weight: 600;">
+    BAYESIAN | GAUSSIAN PROCESS | LLMOPS
+  </p>
+  <h1 style="background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+             font-size: 2.2rem; font-weight: 800; margin: 0 0 8px 0; line-height: 1.2;">
+    {escape(config.title)}
+  </h1>
+  <p style="color: #94a3b8; margin: 0;">{escape(config.subtitle)}</p>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_split_heading(*, label: str, accent_color: str) -> None:
+    st.markdown(
+        f"""
+<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+  <div style="width: 10px; height: 10px; background: {accent_color}; border-radius: 50%;"></div>
+  <span style="color: {accent_color}; font-size: 0.8rem; font-weight: 700;
+               text-transform: uppercase; letter-spacing: 0.1em;">{label}</span>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _format_kpi_value(key: str, value: float) -> str:
+    if key in PERCENT_METRIC_KEYS:
+        return f"{value * 100:.2f}%"
+    return f"{value:.4f}"
+
+
+def _format_delta_badge(
+    key: str,
+    value: float | None,
+    baseline_value: float | None,
+) -> str | None:
+    if value is None or baseline_value is None:
+        return None
+    if key in PERCENT_METRIC_KEYS:
+        return f"{(value - baseline_value) * 100:+.2f}% vs Val"
+    return f"{value - baseline_value:+.4f} vs Val"
+
+
+def _to_relative_display_path(path_value: str | Path, *, root: Path) -> str:
+    candidate = Path(path_value)
+    if not candidate.is_absolute():
+        return str(path_value)
+
+    try:
+        return str(candidate.relative_to(root))
+    except ValueError:
+        try:
+            return os.path.relpath(str(candidate), start=str(root))
+        except ValueError:
+            return str(path_value)
+
+
+def _sanitize_metadata_payload(
+    payload: dict[str, object],
+    *,
+    root: Path,
+) -> dict[str, object]:
+    return {
+        key: _sanitize_metadata_value(key=key, value=value, root=root)
+        for key, value in payload.items()
+    }
+
+
+def _sanitize_metadata_value(
+    *,
+    key: str,
+    value: object,
+    root: Path,
+) -> object:
+    path_like_keys = {
+        "bundle_dir",
+        "checkpoint_path",
+        "evaluation_dir",
+        "bundle_path",
+        "model_dir",
+    }
+
+    if key in path_like_keys and isinstance(value, str):
+        return _to_relative_display_path(value, root=root)
+
+    if isinstance(value, dict):
+        nested: dict[str, object] = {}
+        for nested_key, nested_value in value.items():
+            nested[str(nested_key)] = _sanitize_metadata_value(
+                key=str(nested_key),
+                value=nested_value,
+                root=root,
+            )
+        return nested
+
+    if isinstance(value, list):
+        return [
+            _sanitize_metadata_value(key=key, value=item, root=root)
+            for item in value
+        ]
+
+    return value
+
+
+def _render_kpi_gauges(test_metrics: dict[str, object] | None) -> None:
+    st.markdown("**KPI Gauges (Test split)**")
+    if test_metrics is None:
+        st.caption("KPI gauges are unavailable because test metrics were not found.")
+        return
+
+    try:
+        plotly_go = import_module("plotly.graph_objects")
+    except Exception:
+        st.caption("Install plotly to render KPI gauge charts.")
+        return
+
+    upper_row = st.columns(3)
+    lower_row = st.columns(2)
+    all_columns = [upper_row[0], upper_row[1], upper_row[2], lower_row[0], lower_row[1]]
+
+    for index, (key, label) in enumerate(KPI_SPECS):
+        value = metric_number(test_metrics, key)
+        with all_columns[index]:
+            if value is None:
+                st.metric(label, "N/A")
+                continue
+
+            display_value, axis_range, steps = _gauge_config(key, value)
+            figure = plotly_go.Figure(
+                plotly_go.Indicator(
+                    mode="gauge+number",
+                    value=display_value,
+                    title={"text": f"Test {label}"},
+                    gauge={
+                        "axis": {"range": axis_range},
+                        "bar": {"color": "#60a5fa"},
+                        "steps": steps,
+                        "threshold": {
+                            "line": {"color": "#a78bfa", "width": 4},
+                            "value": display_value,
+                        },
+                    },
+                )
+            )
+            figure.update_layout(height=260, margin={"l": 12, "r": 12, "t": 48, "b": 12})
+            st.plotly_chart(figure, use_container_width=True, config={"displayModeBar": False})
+
+
+def _gauge_config(
+    key: str,
+    value: float,
+) -> tuple[float, list[float], list[dict[str, object]]]:
+    if key in PERCENT_METRIC_KEYS:
+        display = value * 100
+        return (
+            display,
+            [0.0, 100.0],
+            [
+                {"range": [0.0, 70.0], "color": "#10253d"},
+                {"range": [70.0, 85.0], "color": "#163b60"},
+                {"range": [85.0, 95.0], "color": "#1f4f80"},
+                {"range": [95.0, 100.0], "color": "#2b6cb0"},
+            ],
+        )
+
+    upper = max(0.1, value * 2.0)
+    return (
+        value,
+        [0.0, upper],
+        [
+            {"range": [0.0, upper * 0.33], "color": "#163b60"},
+            {"range": [upper * 0.33, upper * 0.66], "color": "#1f4f80"},
+            {"range": [upper * 0.66, upper], "color": "#2b6cb0"},
+        ],
+    )
+
+
+def _try_style_metric_cards() -> None:
+    try:
+        metric_cards_module = import_module("streamlit_extras.metric_cards")
+        style_metric_cards = getattr(metric_cards_module, "style_metric_cards", None)
+        if callable(style_metric_cards):
+            style_metric_cards(
+                background_color="#0f1f35",
+                border_left_color="#60a5fa",
+            )
+    except Exception:
+        return
 
 
 if __name__ == "__main__":
