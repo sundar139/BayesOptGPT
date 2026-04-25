@@ -1,17 +1,107 @@
 from __future__ import annotations
 
 import logging
+import re
 import platform
 from importlib.metadata import PackageNotFoundError, version
+from collections.abc import Mapping
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .serving.config import ServingConfig, load_serving_config, resolve_serving_config_path
 from .serving.runtime import PredictionRecord, ServingRuntime, ServingStartupError
 
 LOGGER = logging.getLogger("bayes_gp_llmops.api")
+
+METADATA_CONTRACT_FIELDS = frozenset(
+    {
+        "model_name",
+        "bundle_id",
+        "bundle_schema_version",
+        "labels",
+        "calibration_enabled",
+        "artifacts",
+        "selected_metrics",
+    }
+)
+METADATA_ARTIFACT_FIELDS = frozenset(
+    {
+        "checkpoint_available",
+        "tokenizer_available",
+        "model_config_available",
+        "data_config_available",
+        "label_map_available",
+        "manifest_available",
+        "calibration_available",
+    }
+)
+_FORBIDDEN_METADATA_KEYS = frozenset(
+    {
+        "bundle_dir",
+        "checkpoint_path",
+        "tokenizer_dir",
+        "storage_path",
+        "trial_dir",
+        "evaluation_dir",
+    }
+)
+_WINDOWS_ABSOLUTE_PATH_PATTERN = re.compile(r"[A-Za-z]:[\\/]")
+_UNIX_ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![A-Za-z0-9_])/(?:[^\s]+)")
+
+
+def _iter_metadata_values(value: object) -> list[str]:
+    if isinstance(value, Mapping):
+        values: list[str] = []
+        for nested in value.values():
+            values.extend(_iter_metadata_values(nested))
+        return values
+    if isinstance(value, list):
+        values = []
+        for item in value:
+            values.extend(_iter_metadata_values(item))
+        return values
+    if isinstance(value, str):
+        return [value]
+    return []
+
+
+def _iter_metadata_keys(value: object) -> list[str]:
+    if isinstance(value, Mapping):
+        keys: list[str] = []
+        for key, nested in value.items():
+            keys.append(str(key))
+            keys.extend(_iter_metadata_keys(nested))
+        return keys
+    if isinstance(value, list):
+        keys = []
+        for item in value:
+            keys.extend(_iter_metadata_keys(item))
+        return keys
+    return []
+
+
+def _contains_absolute_path_fragment(value: str) -> bool:
+    stripped = value.strip()
+    if not stripped:
+        return False
+    return bool(
+        _WINDOWS_ABSOLUTE_PATH_PATTERN.search(stripped)
+        or _UNIX_ABSOLUTE_PATH_PATTERN.search(stripped)
+    )
+
+
+def _raise_if_forbidden_metadata_keys(payload: Mapping[str, object]) -> None:
+    for key in _iter_metadata_keys(payload):
+        if key.lower() in _FORBIDDEN_METADATA_KEYS:
+            raise ValueError(f"Metadata payload contains forbidden key: {key}")
+
+
+def _raise_if_absolute_path_values(payload: Mapping[str, object]) -> None:
+    for value in _iter_metadata_values(payload):
+        if _contains_absolute_path_fragment(value):
+            raise ValueError("Metadata payload contains absolute path values.")
 
 
 class StructuredInput(BaseModel):
@@ -83,6 +173,8 @@ class HealthResponse(BaseModel):
 class MetadataArtifactsResponse(BaseModel):
     """Artifact availability summary for the promoted inference bundle."""
 
+    model_config = ConfigDict(extra="forbid")
+
     checkpoint_available: bool
     tokenizer_available: bool
     model_config_available: bool
@@ -94,6 +186,8 @@ class MetadataArtifactsResponse(BaseModel):
 
 class MetadataResponse(BaseModel):
     """Serving metadata payload suitable for external exposure."""
+
+    model_config = ConfigDict(extra="forbid")
 
     model_name: str
     bundle_id: str
@@ -193,6 +287,7 @@ def create_app(
         )
         if not config.expose_selected_metrics:
             payload["selected_metrics"] = None
+        _assert_metadata_contract(payload)
         return MetadataResponse.model_validate(payload)
 
     @application.post("/predict", response_model=PredictResponse)
@@ -251,6 +346,28 @@ def create_app(
 def _load_default_serving_config() -> ServingConfig:
     config_path = resolve_serving_config_path()
     return load_serving_config(config_path)
+
+
+def _assert_metadata_contract(payload: Mapping[str, object]) -> None:
+    top_level_fields = set(payload.keys())
+    if top_level_fields != METADATA_CONTRACT_FIELDS:
+        raise ValueError(
+            "Metadata payload keys do not match strict contract. "
+            f"expected={sorted(METADATA_CONTRACT_FIELDS)} actual={sorted(top_level_fields)}"
+        )
+
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        raise ValueError("Metadata payload field 'artifacts' must be an object.")
+    artifact_fields = {str(key) for key in artifacts.keys()}
+    if artifact_fields != METADATA_ARTIFACT_FIELDS:
+        raise ValueError(
+            "Metadata payload artifacts keys do not match strict contract. "
+            f"expected={sorted(METADATA_ARTIFACT_FIELDS)} actual={sorted(artifact_fields)}"
+        )
+
+    _raise_if_forbidden_metadata_keys(payload)
+    _raise_if_absolute_path_values(payload)
 
 
 def _get_runtime(request: Request) -> ServingRuntime:

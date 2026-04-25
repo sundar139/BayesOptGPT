@@ -18,6 +18,36 @@ from bayes_gp_llmops.serving.config import ServingConfig
 from bayes_gp_llmops.serving.runtime import ServingRuntime
 
 
+METADATA_TOP_LEVEL_KEYS = {
+    "model_name",
+    "bundle_id",
+    "bundle_schema_version",
+    "labels",
+    "calibration_enabled",
+    "artifacts",
+    "selected_metrics",
+}
+
+METADATA_ARTIFACT_KEYS = {
+    "checkpoint_available",
+    "tokenizer_available",
+    "model_config_available",
+    "data_config_available",
+    "label_map_available",
+    "manifest_available",
+    "calibration_available",
+}
+
+FORBIDDEN_METADATA_KEYS = {
+    "bundle_dir",
+    "checkpoint_path",
+    "tokenizer_dir",
+    "storage_path",
+    "trial_dir",
+    "evaluation_dir",
+}
+
+
 class _Encoding:
     def __init__(self, token_count: int) -> None:
         self.ids = [1] * token_count
@@ -156,10 +186,12 @@ def test_health_and_metadata_endpoints() -> None:
         metadata_response = client.get("/metadata")
         assert metadata_response.status_code == 200
         metadata_payload = metadata_response.json()
+        assert set(metadata_payload.keys()) == METADATA_TOP_LEVEL_KEYS
         assert metadata_payload["model_name"] == "_Model"
         assert metadata_payload["bundle_id"] == "ag-news-study-trial-7"
         assert metadata_payload["bundle_schema_version"] == "1.0"
         assert metadata_payload["labels"] == ["World", "Sports", "Business", "Sci/Tech"]
+        assert set(metadata_payload["artifacts"].keys()) == METADATA_ARTIFACT_KEYS
         assert metadata_payload["artifacts"]["checkpoint_available"] is True
         assert metadata_payload["artifacts"]["tokenizer_available"] is True
         assert metadata_payload["artifacts"]["model_config_available"] is True
@@ -168,6 +200,7 @@ def test_health_and_metadata_endpoints() -> None:
         assert metadata_payload["artifacts"]["manifest_available"] is True
         assert metadata_payload["artifacts"]["calibration_available"] is True
         assert metadata_payload["selected_metrics"]["validation_macro_f1"] == pytest.approx(0.91)
+        assert not set(_collect_metadata_keys(metadata_payload)) & FORBIDDEN_METADATA_KEYS
         assert not _contains_absolute_path_like(metadata_payload)
 
 
@@ -180,7 +213,134 @@ def test_metadata_endpoint_hides_selected_metrics_when_disabled() -> None:
         metadata_response = client.get("/metadata")
     assert metadata_response.status_code == 200
     metadata_payload = metadata_response.json()
+    assert set(metadata_payload.keys()) == METADATA_TOP_LEVEL_KEYS
     assert metadata_payload["selected_metrics"] is None
+
+
+def test_metadata_endpoint_rejects_extra_top_level_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, runtime = _build_runtime()
+    app = create_app(serving_config=config, runtime=runtime)
+    original_metadata_payload = runtime.metadata_payload
+
+    def _unsafe_metadata(*, expose_selected_metrics: bool) -> dict[str, object]:
+        payload = original_metadata_payload(expose_selected_metrics=expose_selected_metrics)
+        payload["storage_path"] = "internal-only"
+        return payload
+
+    monkeypatch.setattr(runtime, "metadata_payload", _unsafe_metadata)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/metadata")
+    assert response.status_code == 500
+
+
+def test_metadata_endpoint_rejects_windows_absolute_path_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, runtime = _build_runtime()
+    app = create_app(serving_config=config, runtime=runtime)
+
+    def _unsafe_metadata(*, expose_selected_metrics: bool) -> dict[str, object]:
+        del expose_selected_metrics
+        return {
+            "model_name": "_Model",
+            "bundle_id": "ag-news-study-trial-7",
+            "bundle_schema_version": "1.0",
+            "labels": ["World", "Sports", "Business", "Sci/Tech"],
+            "calibration_enabled": True,
+            "artifacts": {
+                "checkpoint_available": True,
+                "tokenizer_available": True,
+                "model_config_available": True,
+                "data_config_available": True,
+                "label_map_available": True,
+                "manifest_available": True,
+                "calibration_available": True,
+            },
+            "selected_metrics": {
+                "validation_macro_f1": "C:\\Users\\rohit\\secret\\metadata.json"
+            },
+        }
+
+    monkeypatch.setattr(runtime, "metadata_payload", _unsafe_metadata)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/metadata")
+    assert response.status_code == 500
+
+
+def test_metadata_endpoint_rejects_unix_absolute_path_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, runtime = _build_runtime()
+    app = create_app(serving_config=config, runtime=runtime)
+
+    def _unsafe_metadata(*, expose_selected_metrics: bool) -> dict[str, object]:
+        del expose_selected_metrics
+        return {
+            "model_name": "_Model",
+            "bundle_id": "ag-news-study-trial-7",
+            "bundle_schema_version": "1.0",
+            "labels": ["World", "Sports", "Business", "Sci/Tech"],
+            "calibration_enabled": True,
+            "artifacts": {
+                "checkpoint_available": True,
+                "tokenizer_available": True,
+                "model_config_available": True,
+                "data_config_available": True,
+                "label_map_available": True,
+                "manifest_available": True,
+                "calibration_available": True,
+            },
+            "selected_metrics": {
+                "validation_macro_f1": "/app/secrets/runtime/internal.json"
+            },
+        }
+
+    monkeypatch.setattr(runtime, "metadata_payload", _unsafe_metadata)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/metadata")
+    assert response.status_code == 500
+
+
+def test_metadata_endpoint_rejects_nested_unsafe_fields_and_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, runtime = _build_runtime()
+    app = create_app(serving_config=config, runtime=runtime)
+
+    def _unsafe_metadata(*, expose_selected_metrics: bool) -> dict[str, object]:
+        del expose_selected_metrics
+        return {
+            "model_name": "_Model",
+            "bundle_id": "ag-news-study-trial-7",
+            "bundle_schema_version": "1.0",
+            "labels": ["World", "Sports", "Business", "Sci/Tech"],
+            "calibration_enabled": True,
+            "artifacts": {
+                "checkpoint_available": True,
+                "tokenizer_available": True,
+                "model_config_available": True,
+                "data_config_available": True,
+                "label_map_available": True,
+                "manifest_available": True,
+                "calibration_available": True,
+            },
+            "selected_metrics": {
+                "validation_macro_f1": {
+                    "storage_path": "/home/app/private/store",
+                }
+            },
+        }
+
+    monkeypatch.setattr(runtime, "metadata_payload", _unsafe_metadata)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.get("/metadata")
+    assert response.status_code == 500
 
 
 def test_root_route_and_version() -> None:
@@ -348,3 +508,20 @@ def _contains_absolute_path_like(value: object) -> bool:
         )
 
     return False
+
+
+def _collect_metadata_keys(value: object) -> list[str]:
+    if isinstance(value, dict):
+        keys: list[str] = []
+        for key, nested in value.items():
+            keys.append(str(key))
+            keys.extend(_collect_metadata_keys(nested))
+        return keys
+
+    if isinstance(value, list):
+        keys: list[str] = []
+        for item in value:
+            keys.extend(_collect_metadata_keys(item))
+        return keys
+
+    return []
