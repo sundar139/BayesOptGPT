@@ -80,16 +80,27 @@ class HealthResponse(BaseModel):
     calibration_enabled: bool
 
 
+class MetadataArtifactsResponse(BaseModel):
+    """Artifact availability summary for the promoted inference bundle."""
+
+    checkpoint_available: bool
+    tokenizer_available: bool
+    model_config_available: bool
+    data_config_available: bool
+    label_map_available: bool
+    manifest_available: bool
+    calibration_available: bool
+
+
 class MetadataResponse(BaseModel):
     """Serving metadata payload suitable for external exposure."""
 
+    model_name: str
     bundle_id: str
-    study_name: str
-    trial_number: int
-    created_at: str
-    label_names: list[str]
+    bundle_schema_version: str
+    labels: list[str]
     calibration_enabled: bool
-    model: dict[str, object]
+    artifacts: MetadataArtifactsResponse
     selected_metrics: dict[str, float | None] | None = None
 
 
@@ -110,7 +121,7 @@ def create_app(
     config = serving_config or _load_default_serving_config()
 
     application = FastAPI(
-        title="bayes-gp-llmops serving",
+        title="BayesOptGPT Serving",
         version="1.0.0",
         description=(
             "Bundle-driven text classification service with uncertainty metrics and "
@@ -142,14 +153,14 @@ def create_app(
         )
         html = (
             "<!doctype html>"
-            "<html><head><meta charset='utf-8'><title>bayes-gp-llmops serving</title>"
+            "<html><head><meta charset='utf-8'><title>BayesOptGPT Serving</title>"
             "<style>body{font-family:Segoe UI,Arial,sans-serif;max-width:840px;margin:32px auto;"
             "padding:0 16px;line-height:1.45;color:#0f172a;background:#f8fafc;}"
             "h1{margin-bottom:0.3rem;}"
             "a{color:#0369a1;text-decoration:none;}"
             "code{background:#e2e8f0;padding:2px 6px;border-radius:4px;}"
             "ul{padding-left:18px;}</style></head><body>"
-            "<h1>bayes-gp-llmops serving</h1>"
+            "<h1>BayesOptGPT Serving</h1>"
             "<p>Bundle-driven inference service for AG News text classification.</p>"
             f"<p><strong>Bundle:</strong> {runtime_state.bundle_identifier}</p>"
             "<ul>"
@@ -228,7 +239,7 @@ def create_app(
     @application.get("/version", response_model=VersionResponse)
     def service_version() -> VersionResponse:
         return VersionResponse(
-            service="bayes-gp-llmops",
+            service="BayesOptGPT Serving",
             package_version=_package_version(),
             python_version=platform.python_version(),
             platform=platform.platform(),

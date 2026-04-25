@@ -93,7 +93,7 @@ def build_champion_manifest(champion: CandidateMetrics) -> ChampionManifest:
     return ChampionManifest(
         study_name=champion.study_name,
         trial_number=champion.trial_number,
-        checkpoint_path=str(champion.checkpoint_path.resolve()),
+        checkpoint_path=str(champion.checkpoint_path),
         selected_metrics={
             "validation_macro_f1": champion.validation_macro_f1,
             "validation_nll": champion.validation_nll,
@@ -118,8 +118,11 @@ def write_champion_manifest(manifest: ChampionManifest, output_dir: Path) -> Pat
         Path to the written manifest file.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    sanitized_manifest = manifest.model_copy(
+        update={"checkpoint_path": _checkpoint_filename(manifest.checkpoint_path)}
+    )
     path = output_dir / "champion_manifest.json"
-    write_json(path, manifest.model_dump(mode="json"))
+    write_json(path, sanitized_manifest.model_dump(mode="json"))
     LOGGER.info("Champion manifest written: %s", path)
     return path
 
@@ -247,3 +250,7 @@ def _extract_float(metrics: dict[str, object], key: str) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
+
+
+def _checkpoint_filename(checkpoint_path: str) -> str:
+    return Path(checkpoint_path.replace("\\", "/")).name

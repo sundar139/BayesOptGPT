@@ -169,17 +169,19 @@ def _load_json_mapping(
 ) -> dict[str, object] | None:
     if not path.exists():
         if required:
-            warnings.append(f"Missing required file: {path}")
+            warnings.append(f"Missing required file: {path.name}")
         return None
     with path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
     if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}, received {type(payload).__name__}.")
+        raise ValueError(
+            f"Expected JSON object in {path.name}, received {type(payload).__name__}."
+        )
     return cast(dict[str, object], payload)
 
 
 def _resolve_optional_path(path: Path, warnings: list[str]) -> Path | None:
     if path.exists():
         return path
-    warnings.append(f"Visualization not found: {path}")
+    warnings.append(f"Visualization not found: {path.name}")
     return None

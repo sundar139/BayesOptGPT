@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from html import escape
 from importlib import import_module
 from pathlib import Path
@@ -21,6 +20,10 @@ from bayes_gp_llmops.dashboard import (
     run_single_prediction,
     uncertainty_summary,
 )
+from bayes_gp_llmops.serving.metadata_safety import (
+    sanitize_metadata_mapping,
+    sanitize_path_value,
+)
 
 KPI_SPECS: tuple[tuple[str, str], ...] = (
     ("accuracy", "Accuracy"),
@@ -39,12 +42,12 @@ def main() -> None:
         page_title=config.title,
         page_icon="📊",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="collapsed",
     )
     _inject_theme_css()
     _render_header_banner(config)
 
-    evaluation_dir, bundle_dir, api_base_url = _render_sidebar(config)
+    evaluation_dir, bundle_dir, api_base_url = _resolve_runtime_inputs(config)
     dashboard_data = load_dashboard_data(
         evaluation_dir=evaluation_dir,
         bundle_dir=bundle_dir,
@@ -93,34 +96,12 @@ def main() -> None:
         )
 
 
-def _render_sidebar(config: DashboardConfig) -> tuple[Path, Path, str | None]:
-    with st.sidebar:
-        st.subheader("Dashboard Configuration")
-        evaluation_dir = Path(
-            st.text_input(
-                "Evaluation artifact directory",
-                value=str(config.evaluation_dir),
-                help="Directory containing metrics JSON and visualization PNG outputs.",
-            )
-        )
-        bundle_dir = Path(
-            st.text_input(
-                "Promoted bundle directory",
-                value=str(config.bundle_dir),
-                help="Directory containing bundle_metadata.json and champion_manifest.json.",
-            )
-        )
-        api_base_input = st.text_input(
-            "API base URL",
-            value=config.api_base_url or "",
-            help="Optional FastAPI base URL, for example http://localhost:7860.",
-        )
-        api_base_url = normalize_api_base_url(api_base_input)
-        if api_base_url is None:
-            st.info("Live inference is disabled until API base URL is configured.")
-        else:
-            st.success(f"Live inference enabled via {api_base_url}")
-    return evaluation_dir, bundle_dir, api_base_url
+def _resolve_runtime_inputs(config: DashboardConfig) -> tuple[Path, Path, str | None]:
+    return (
+        config.evaluation_dir,
+        config.bundle_dir,
+        normalize_api_base_url(config.api_base_url),
+    )
 
 
 def _render_overview(
@@ -318,7 +299,9 @@ def _render_calibration_and_uncertainty(
 def _render_live_inference(api_base_url: str | None) -> None:
     st.subheader("Live Inference")
     if api_base_url is None:
-        st.info("Live inference is disabled. Set API base URL in the sidebar to enable requests.")
+        st.info(
+            "Live inference is disabled. Set API_BASE_URL to enable requests against serving."
+        )
         return
 
     st.caption(f"Connected endpoint: {api_base_url}")
@@ -405,8 +388,8 @@ def _render_metadata(
 ) -> None:
     st.subheader("Model Metadata")
     workspace_root = Path(__file__).resolve().parent
-    display_evaluation_dir = _to_relative_display_path(evaluation_dir, root=workspace_root)
-    display_bundle_dir = _to_relative_display_path(bundle_dir, root=workspace_root)
+    display_evaluation_dir = sanitize_path_value(evaluation_dir, root=workspace_root)
+    display_bundle_dir = sanitize_path_value(bundle_dir, root=workspace_root)
 
     st.markdown("**Artifact paths**")
     st.code(
@@ -486,11 +469,13 @@ def _inject_theme_css() -> None:
     background: radial-gradient(ellipse at top left, #0d1b2a 0%, #0a0f1e 60%, #06080f 100%);
 }
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0d1b2a 0%, #0a1628 100%);
-    border-right: 1px solid #1e3a5f;
+    display: none;
 }
-[data-testid="stSidebar"] * {
-    color: #94b8d8 !important;
+[data-testid="collapsedControl"] {
+    display: none;
+}
+[data-testid="stSidebarNav"] {
+    display: none;
 }
 [data-testid="stTabs"] button {
     color: #64748b !important;
@@ -498,16 +483,16 @@ def _inject_theme_css() -> None:
     border-bottom: 2px solid transparent !important;
 }
 [data-testid="stTabs"] button[aria-selected="true"] {
-    color: #a78bfa !important;
-    border-bottom: 2px solid #a78bfa !important;
+    color: #60a5fa !important;
+    border-bottom: 2px solid #60a5fa !important;
 }
 [data-testid="metric-container"] {
     background: linear-gradient(135deg, #0f1f35 0%, #0d1828 100%);
     border: 1px solid #1e3d6e;
-    border-top: 2px solid #7c3aed;
+    border-top: 2px solid #60a5fa;
     border-radius: 14px;
     padding: 20px 16px;
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.08), 0 4px 24px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.08), 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 [data-testid="stMetricValue"] {
     color: #e2e8f0 !important;
@@ -544,7 +529,7 @@ def _render_header_banner(config: DashboardConfig) -> None:
 <div style="background: linear-gradient(135deg, #0d1b2a 0%, #130a2e 50%, #0d1b2a 100%);
             border: 1px solid #1e3a5f; border-left: 4px solid #60a5fa;
             border-radius: 16px; padding: 28px 36px; margin-bottom: 24px;">
-  <p style="color: #7c3aed; font-size: 0.75rem; letter-spacing: 0.15em;
+    <p style="color: #38bdf8; font-size: 0.75rem; letter-spacing: 0.15em;
             text-transform: uppercase; margin: 0 0 8px 0; font-weight: 600;">
     BAYESIAN | GAUSSIAN PROCESS | LLMOPS
   </p>
@@ -591,65 +576,12 @@ def _format_delta_badge(
     return f"{value - baseline_value:+.4f} vs Val"
 
 
-def _to_relative_display_path(path_value: str | Path, *, root: Path) -> str:
-    candidate = Path(path_value)
-    if not candidate.is_absolute():
-        return str(path_value)
-
-    try:
-        return str(candidate.relative_to(root))
-    except ValueError:
-        try:
-            return os.path.relpath(str(candidate), start=str(root))
-        except ValueError:
-            return str(path_value)
-
-
 def _sanitize_metadata_payload(
     payload: dict[str, object],
     *,
     root: Path,
 ) -> dict[str, object]:
-    return {
-        key: _sanitize_metadata_value(key=key, value=value, root=root)
-        for key, value in payload.items()
-    }
-
-
-def _sanitize_metadata_value(
-    *,
-    key: str,
-    value: object,
-    root: Path,
-) -> object:
-    path_like_keys = {
-        "bundle_dir",
-        "checkpoint_path",
-        "evaluation_dir",
-        "bundle_path",
-        "model_dir",
-    }
-
-    if key in path_like_keys and isinstance(value, str):
-        return _to_relative_display_path(value, root=root)
-
-    if isinstance(value, dict):
-        nested: dict[str, object] = {}
-        for nested_key, nested_value in value.items():
-            nested[str(nested_key)] = _sanitize_metadata_value(
-                key=str(nested_key),
-                value=nested_value,
-                root=root,
-            )
-        return nested
-
-    if isinstance(value, list):
-        return [
-            _sanitize_metadata_value(key=key, value=item, root=root)
-            for item in value
-        ]
-
-    return value
+    return sanitize_metadata_mapping(payload, root=root)
 
 
 def _render_kpi_gauges(test_metrics: dict[str, object] | None) -> None:

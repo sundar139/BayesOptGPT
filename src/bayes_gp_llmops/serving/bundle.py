@@ -38,6 +38,7 @@ from pydantic import BaseModel, Field
 from bayes_gp_llmops.tracking.mlflow_utils import write_json
 
 from .champion import ChampionManifest
+from .metadata_safety import sanitize_metadata_mapping, sanitize_path_value
 
 LOGGER = logging.getLogger("bayes_gp_llmops.serving.bundle")
 
@@ -119,7 +120,12 @@ def package_inference_bundle(
 
     write_json(output_dir / "model_config.json", model_config_dict)
     write_json(output_dir / "data_config.json", data_config_dict)
-    write_json(output_dir / "champion_manifest.json", champion_manifest.model_dump(mode="json"))
+    manifest_payload = sanitize_metadata_mapping(
+        champion_manifest.model_dump(mode="json"),
+        root=output_dir,
+    )
+    manifest_payload["checkpoint_path"] = "checkpoint.ckpt"
+    write_json(output_dir / "champion_manifest.json", manifest_payload)
     write_json(output_dir / "label_map.json", dict(label_map.items()))
 
     has_calibration = False
@@ -137,7 +143,7 @@ def package_inference_bundle(
         if p.is_file()
     )
     metadata = BundleMetadata(
-        bundle_dir=str(output_dir.resolve()),
+        bundle_dir=sanitize_path_value(output_dir, root=output_dir),
         created_at=datetime.now(tz=UTC).isoformat(),
         champion_trial_number=champion_manifest.trial_number,
         champion_study_name=champion_manifest.study_name,

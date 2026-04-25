@@ -128,20 +128,23 @@ class ServingRuntime:
     def metadata_payload(self, *, expose_selected_metrics: bool) -> dict[str, object]:
         """Return API-safe metadata for service inspection endpoints."""
 
+        included_files = set(self._bundle_metadata.included_files)
+        tokenizer_available = any(path.startswith("tokenizer/") for path in included_files)
+
         payload: dict[str, object] = {
+            "model_name": self._loaded_bundle.model.__class__.__name__,
             "bundle_id": self.bundle_identifier,
-            "study_name": self._champion_manifest.study_name,
-            "trial_number": self._champion_manifest.trial_number,
-            "created_at": self._bundle_metadata.created_at,
-            "label_names": self.label_names,
+            "bundle_schema_version": self._bundle_metadata.schema_version,
+            "labels": self.label_names,
             "calibration_enabled": self.calibration_active,
-            "model": {
-                "num_classes": self._loaded_bundle.model_config.num_classes,
-                "max_sequence_length": self._loaded_bundle.max_sequence_length,
-                "hidden_size": self._loaded_bundle.model_config.hidden_size,
-                "num_layers": self._loaded_bundle.model_config.num_layers,
-                "num_attention_heads": self._loaded_bundle.model_config.num_attention_heads,
-                "pooling": self._loaded_bundle.model_config.pooling,
+            "artifacts": {
+                "checkpoint_available": "checkpoint.ckpt" in included_files,
+                "tokenizer_available": tokenizer_available,
+                "model_config_available": "model_config.json" in included_files,
+                "data_config_available": "data_config.json" in included_files,
+                "label_map_available": "label_map.json" in included_files,
+                "manifest_available": "champion_manifest.json" in included_files,
+                "calibration_available": "calibration.json" in included_files,
             },
         }
         if expose_selected_metrics:

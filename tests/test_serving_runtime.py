@@ -165,7 +165,13 @@ def test_runtime_load_from_bundle_validates_bundle(
     assert runtime.calibration_active is True
 
     metadata = runtime.metadata_payload(expose_selected_metrics=True)
+    assert metadata["model_name"] == "_Model"
     assert metadata["bundle_id"] == "runtime-study-trial-3"
+    assert metadata["bundle_schema_version"] == "1.0"
+    artifacts = metadata["artifacts"]
+    assert isinstance(artifacts, dict)
+    assert artifacts["checkpoint_available"] is True
+    assert artifacts["tokenizer_available"] is True
     assert metadata["selected_metrics"] is not None
 
 

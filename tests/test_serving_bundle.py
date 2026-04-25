@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -117,6 +118,14 @@ class TestPackageInferenceBundle:
         assert isinstance(metadata.included_files, list)
         assert len(metadata.included_files) > 0
         assert metadata.has_calibration is False
+        assert not _looks_absolute_path(metadata.bundle_dir)
+
+    def test_manifest_checkpoint_path_is_sanitized(self, tmp_path: Path) -> None:
+        _, bundle_dir = _build_bundle(tmp_path)
+        manifest_payload = json.loads((bundle_dir / "champion_manifest.json").read_text())
+        checkpoint_path = str(manifest_payload["checkpoint_path"])
+        assert checkpoint_path == "checkpoint.ckpt"
+        assert not _looks_absolute_path(checkpoint_path)
 
     def test_bundle_metadata_has_calibration(self, tmp_path: Path) -> None:
         _, bundle_dir = _build_bundle(tmp_path, with_calibration=True)
@@ -193,3 +202,11 @@ class TestLoadBundleMetadata:
     def test_missing_metadata_file_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
             load_bundle_metadata(tmp_path)
+
+
+def _looks_absolute_path(value: str) -> bool:
+    return bool(
+        value.startswith("/")
+        or value.startswith("\\\\")
+        or re.match(r"^[A-Za-z]:[\\/]", value)
+    )

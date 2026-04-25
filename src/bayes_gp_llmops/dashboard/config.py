@@ -17,10 +17,10 @@ class DashboardConfig:
 
     @classmethod
     def from_env(cls) -> DashboardConfig:
-        title = os.getenv("DASHBOARD_TITLE", "LLM Calibration & Evaluation Dashboard")
+        title = os.getenv("DASHBOARD_TITLE", "BayesOptGPT Serving")
         subtitle = os.getenv(
             "DASHBOARD_SUBTITLE",
-            "AG News | Bayesian Hyperparameter Optimization | Uncertainty Quantification",
+            "AG News inference, calibration, and uncertainty intelligence",
         )
         evaluation_dir = Path(
             os.getenv("DASHBOARD_ARTIFACT_DIR", "artifacts/evaluation_full_run")

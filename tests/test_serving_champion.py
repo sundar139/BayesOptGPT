@@ -128,6 +128,20 @@ class TestChampionManifest:
         with pytest.raises(FileNotFoundError):
             load_champion_manifest(tmp_path / "nonexistent.json")
 
+    def test_write_manifest_sanitizes_absolute_checkpoint_path(self, tmp_path: Path) -> None:
+        checkpoint_path = tmp_path / "checkpoints" / "best.ckpt"
+        candidate = CandidateMetrics(
+            study_name="test-study",
+            trial_number=10,
+            checkpoint_path=checkpoint_path,
+            validation_macro_f1=0.90,
+        )
+
+        manifest = build_champion_manifest(candidate)
+        manifest_path = write_champion_manifest(manifest, tmp_path)
+        written = load_champion_manifest(manifest_path)
+        assert written.checkpoint_path == "best.ckpt"
+
 
 class TestLoadCandidatesFromTuningDir:
     def _build_trial_dir(

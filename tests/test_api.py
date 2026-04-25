@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import cast
 
@@ -81,13 +82,24 @@ def _build_runtime(
         pooling="masked_mean",
     )
 
+    included_files = [
+        "checkpoint.ckpt",
+        "tokenizer/tokenizer.json",
+        "model_config.json",
+        "data_config.json",
+        "champion_manifest.json",
+        "label_map.json",
+    ]
+    if calibration_temperature is not None:
+        included_files.append("calibration.json")
+
     bundle_metadata = BundleMetadata(
         bundle_dir="artifacts/model/bundle",
         created_at="2026-01-01T00:00:00+00:00",
         champion_trial_number=7,
         champion_study_name="ag-news-study",
         selected_metrics={"validation_macro_f1": 0.91},
-        included_files=["checkpoint.ckpt"],
+        included_files=included_files,
         has_calibration=calibration_temperature is not None,
     )
     champion_manifest = ChampionManifest(
@@ -144,9 +156,31 @@ def test_health_and_metadata_endpoints() -> None:
         metadata_response = client.get("/metadata")
         assert metadata_response.status_code == 200
         metadata_payload = metadata_response.json()
+        assert metadata_payload["model_name"] == "_Model"
         assert metadata_payload["bundle_id"] == "ag-news-study-trial-7"
-        assert metadata_payload["label_names"] == ["World", "Sports", "Business", "Sci/Tech"]
+        assert metadata_payload["bundle_schema_version"] == "1.0"
+        assert metadata_payload["labels"] == ["World", "Sports", "Business", "Sci/Tech"]
+        assert metadata_payload["artifacts"]["checkpoint_available"] is True
+        assert metadata_payload["artifacts"]["tokenizer_available"] is True
+        assert metadata_payload["artifacts"]["model_config_available"] is True
+        assert metadata_payload["artifacts"]["data_config_available"] is True
+        assert metadata_payload["artifacts"]["label_map_available"] is True
+        assert metadata_payload["artifacts"]["manifest_available"] is True
+        assert metadata_payload["artifacts"]["calibration_available"] is True
         assert metadata_payload["selected_metrics"]["validation_macro_f1"] == pytest.approx(0.91)
+        assert not _contains_absolute_path_like(metadata_payload)
+
+
+def test_metadata_endpoint_hides_selected_metrics_when_disabled() -> None:
+    config, runtime = _build_runtime()
+    secure_config = config.model_copy(update={"expose_selected_metrics": False})
+    app = create_app(serving_config=secure_config, runtime=runtime)
+
+    with TestClient(app) as client:
+        metadata_response = client.get("/metadata")
+    assert metadata_response.status_code == 200
+    metadata_payload = metadata_response.json()
+    assert metadata_payload["selected_metrics"] is None
 
 
 def test_root_route_and_version() -> None:
@@ -156,13 +190,13 @@ def test_root_route_and_version() -> None:
     with TestClient(app) as client:
         root_response = client.get("/")
         assert root_response.status_code == 200
-        assert "bayes-gp-llmops serving" in root_response.text
+        assert "BayesOptGPT Serving" in root_response.text
         assert "/docs" in root_response.text
 
         version_response = client.get("/version")
         assert version_response.status_code == 200
         version_payload = version_response.json()
-        assert version_payload["service"] == "bayes-gp-llmops"
+        assert version_payload["service"] == "BayesOptGPT Serving"
         assert "python_version" in version_payload
 
 
@@ -296,3 +330,21 @@ def test_startup_fails_for_invalid_bundle(tmp_path: Path) -> None:
         app
     ) as _client:
         _ = _client.get("/health")
+
+
+def _contains_absolute_path_like(value: object) -> bool:
+    if isinstance(value, dict):
+        return any(_contains_absolute_path_like(item) for item in value.values())
+
+    if isinstance(value, list):
+        return any(_contains_absolute_path_like(item) for item in value)
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        return bool(
+            stripped.startswith("/")
+            or stripped.startswith("\\\\")
+            or re.match(r"^[A-Za-z]:[\\/]", stripped)
+        )
+
+    return False

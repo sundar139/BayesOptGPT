@@ -22,7 +22,8 @@ Service startup performs bundle validation before model construction.
 When startup is successful:
 
 - `/health` reports `bundle_validation_status=passed` and `model_loaded=true`
-- `/metadata` returns bundle id, trial metadata, label names, and selected metrics (configurable)
+- `/metadata` returns a whitelisted payload with model name, bundle id/version, labels,
+  calibration status, selected metrics (configurable), and artifact availability booleans
 
 When startup fails:
 
@@ -44,9 +45,11 @@ Readiness response with:
 
 Exposes safe metadata:
 
-- bundle id and promotion trial metadata
+- model name
+- bundle id + bundle schema version
 - label names
-- selected model metadata (`num_classes`, `max_sequence_length`, shape config)
+- calibration enabled status
+- artifact availability booleans (`checkpoint`, `tokenizer`, `config`, `manifest`, etc.)
 - selected metrics from promotion manifest when enabled in serving config
 
 ### `POST /predict`
