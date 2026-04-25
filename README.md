@@ -9,15 +9,15 @@
 ---
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-%23white?style=flat-square" alt="License: MIT"/>
-  <img src="https://img.shields.io/badge/python-3.12-%233776AB?style=flat-square&logo=python" alt="Python 3.12"/>
-  <img src="https://img.shields.io/badge/pytorch-%23EE4C2C?style=flat-square&logo=pytorch" alt="PyTorch"/>
-  <img src="https://img.shields.io/badge/fastapi-%23009639?style=flat-square&logo=fastapi" alt="FastAPI"/>
-  <img src="https://img.shields.io/badge/streamlit-%23FF4B4B?style=flat-square&logo=streamlit" alt="Streamlit"/>
-  <img src="https://img.shields.io/badge/optuna-%238675F6?style=flat-square" alt="Optuna"/>
-  <img src="https://img.shields.io/badge/mlflow-%23F0FAD4?style=flat-square" alt="MLflow"/>
-  <img src="https://img.shields.io/badge/docker-%232496ED?style=flat-square&logo=docker" alt="Docker"/>
-  <img src="https://img.shields.io/badge/huggingface_spaces-%23FFD21E?style=flat-square&logo=huggingface" alt="Hugging Face Spaces"/>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-%233FCF6E?style=flat-square" alt="License: MIT"/></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12-%233776AB?style=flat-square&logo=python" alt="Python 3.12"/></a>
+  <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/pytorch-%23EE4C2C?style=flat-square&logo=pytorch" alt="PyTorch"/></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/fastapi-%23009639?style=flat-square&logo=fastapi" alt="FastAPI"/></a>
+  <a href="https://streamlit.io/"><img src="https://img.shields.io/badge/streamlit-%23FF4B4B?style=flat-square&logo=streamlit" alt="Streamlit"/></a>
+  <a href="https://optuna.org/"><img src="https://img.shields.io/badge/optuna-%238675F6?style=flat-square" alt="Optuna"/></a>
+  <a href="https://mlflow.org/"><img src="https://img.shields.io/badge/mlflow-%23F0FAD4?style=flat-square" alt="MLflow"/></a>
+  <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/docker-%232496ED?style=flat-square&logo=docker" alt="Docker"/></a>
+  <a href="https://huggingface.co/spaces"><img src="https://img.shields.io/badge/huggingface_spaces-%23FFD21E?style=flat-square&logo=huggingface" alt="Hugging Face Spaces"/></a>
 </p>
 
 ---
