@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-import re
 import platform
-from importlib.metadata import PackageNotFoundError, version
+import re
 from collections.abc import Mapping
+from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -359,7 +359,7 @@ def _assert_metadata_contract(payload: Mapping[str, object]) -> None:
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, Mapping):
         raise ValueError("Metadata payload field 'artifacts' must be an object.")
-    artifact_fields = {str(key) for key in artifacts.keys()}
+    artifact_fields = {str(key) for key in artifacts}
     if artifact_fields != METADATA_ARTIFACT_FIELDS:
         raise ValueError(
             "Metadata payload artifacts keys do not match strict contract. "

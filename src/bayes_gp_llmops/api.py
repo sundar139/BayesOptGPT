@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
-import re
 import platform
+import re
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from importlib.metadata import PackageNotFoundError, version
-from collections.abc import Mapping
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -214,6 +215,16 @@ def create_app(
 ) -> FastAPI:
     config = serving_config or _load_default_serving_config()
 
+    @asynccontextmanager
+    async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
+        if application.state.runtime is None:
+            try:
+                application.state.runtime = ServingRuntime.load_from_bundle(config)
+            except ServingStartupError as exc:
+                LOGGER.exception("Serving startup failed.")
+                raise RuntimeError(str(exc)) from exc
+        yield
+
     application = FastAPI(
         title="BayesOptGPT Serving",
         version="1.0.0",
@@ -221,20 +232,10 @@ def create_app(
             "Bundle-driven text classification service with uncertainty metrics and "
             "optional temperature scaling."
         ),
+        lifespan=_lifespan,
     )
     application.state.runtime = runtime
     application.state.serving_config = config
-
-    @application.on_event("startup")
-    def _startup() -> None:
-        if application.state.runtime is not None:
-            return
-
-        try:
-            application.state.runtime = ServingRuntime.load_from_bundle(config)
-        except ServingStartupError as exc:
-            LOGGER.exception("Serving startup failed.")
-            raise RuntimeError(str(exc)) from exc
 
     @application.get("/", response_class=HTMLResponse)
     def root(request: Request) -> HTMLResponse:
@@ -359,7 +360,7 @@ def _assert_metadata_contract(payload: Mapping[str, object]) -> None:
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, Mapping):
         raise ValueError("Metadata payload field 'artifacts' must be an object.")
-    artifact_fields = {str(key) for key in artifacts.keys()}
+    artifact_fields = {str(key) for key in artifacts}
     if artifact_fields != METADATA_ARTIFACT_FIELDS:
         raise ValueError(
             "Metadata payload artifacts keys do not match strict contract. "

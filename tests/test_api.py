@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from pathlib import Path
 from typing import cast
 
@@ -16,7 +17,6 @@ from bayes_gp_llmops.serving.bundle_loader import LoadedBundle
 from bayes_gp_llmops.serving.champion import ChampionManifest
 from bayes_gp_llmops.serving.config import ServingConfig
 from bayes_gp_llmops.serving.runtime import ServingRuntime
-
 
 METADATA_TOP_LEVEL_KEYS = {
     "model_name",
@@ -480,6 +480,31 @@ def test_startup_with_loader_when_runtime_not_injected(
     with TestClient(app) as client:
         response = client.get("/health")
     assert response.status_code == 200
+
+
+def test_startup_has_no_on_event_deprecation_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, runtime = _build_runtime()
+    monkeypatch.setattr(
+        "bayes_gp_llmops.api.ServingRuntime.load_from_bundle",
+        lambda _config: runtime,
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        app = create_app(serving_config=config)
+        with TestClient(app) as client:
+            response = client.get("/health")
+        assert response.status_code == 200
+
+    fastapi_on_event_warnings = [
+        warning
+        for warning in caught
+        if issubclass(warning.category, DeprecationWarning)
+        and "on_event is deprecated" in str(warning.message)
+    ]
+    assert not fastapi_on_event_warnings
 
 
 def test_startup_fails_for_invalid_bundle(tmp_path: Path) -> None:
