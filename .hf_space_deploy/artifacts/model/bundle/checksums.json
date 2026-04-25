@@ -1,0 +1,12 @@
+{
+  "calibration.json": "a60dace1fe71fddd687f4d41daf9382177b323cdabe8ee284d70d50b32b3e423",
+  "champion_manifest.json": "390549afa2ece47670366c74dc41cebd5ea33d0a614d50ee0808215cbcfb3311",
+  "checkpoint.ckpt": "6cf685a0b62967714a6eb67bc63d86ed5cf3b3d4678dba340167ae31ebc0939b",
+  "data_config.json": "957cf60ee4b135e66cabbd5bae510b4aecd17307839aae4b2da1806708b09fa0",
+  "label_map.json": "a9ef284aa76a011ac77e0a78c13ffc8ea27018ff9d5c3fd73924de1d2d13f500",
+  "model_config.json": "90fbff17fa3d8d0d6e774e6a4c14578b26d34cb3484cbd7cb808ef120dcbc324",
+  "tokenizer/special_tokens_map.json": "57399349112652512ad1ba361b52995b1b24705724741d7228c4669a3a4fb3f5",
+  "tokenizer/tokenizer.json": "47d202fde4feb929fc30f2d47ccf569316b3b35bd49b8233469b285576b55cc6",
+  "tokenizer/tokenizer_config.json": "e8891235562241f86839cb168dfdbfd42097e744af7b5404457e9d3574ee9fd5",
+  "tokenizer/tokenizer_metadata.json": "f68ec43a000941252738f1dc83fc454ca5535c729ed5da9408f15326c974590b"
+}

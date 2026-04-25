@@ -1,0 +1,26 @@
+{
+  "dataloader": {
+    "batch_size": 16,
+    "num_workers": 0,
+    "pin_memory": false
+  },
+  "dataset": {
+    "config": null,
+    "debug_subset_size": 1024,
+    "label_field": "label",
+    "name": "ag_news",
+    "random_seed": 42,
+    "text_field": "text",
+    "validation_split_ratio": 0.1
+  },
+  "paths": {
+    "dataset_cache_dir": "data\\hf_cache",
+    "processed_cache_dir": "data\\processed",
+    "tokenizer_dir": "artifacts\\tokenizer"
+  },
+  "tokenizer": {
+    "max_sequence_length": 256,
+    "min_frequency": 2,
+    "vocab_size": 16000
+  }
+}

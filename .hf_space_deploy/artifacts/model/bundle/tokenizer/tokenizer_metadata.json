@@ -1,0 +1,7 @@
+{
+  "corpus_source": "ag_news:train",
+  "max_sequence_length": 256,
+  "min_token_frequency": 2,
+  "requested_vocab_size": 16000,
+  "trained_vocab_size": 16000
+}

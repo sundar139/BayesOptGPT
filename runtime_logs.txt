@@ -1,0 +1,15 @@
+===== Application Startup at 2026-04-25 04:28:48 =====
+2026-04-25 04:30:56,721 | INFO | bayes_gp_llmops.serving.bundle | Bundle validation passed: /app/artifacts/model/bundle
+2026-04-25 04:30:56,843 | INFO | bayes_gp_llmops.serving.bundle_loader | Bundle loaded from /app/artifacts/model/bundle (device=cpu)
+2026-04-25 04:30:56,844 | INFO | bayes_gp_llmops.serving.runtime | Serving runtime loaded: bundle=/app/artifacts/model/bundle calibration_active=True
+bundle_dir=/app/artifacts/model/bundle
+bundle_validation=passed
+host=0.0.0.0
+port=7860
+calibration_enabled=true
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:7860 (Press CTRL+C to quit)
+INFO:     10.16.47.45:25021 - "GET /?logs=container HTTP/1.1" 200 OK
+INFO:     10.16.24.44:29806 - "GET /?logs=container HTTP/1.1" 200 OK

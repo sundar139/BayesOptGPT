@@ -1,0 +1,31 @@
+{
+  "bundle_dir": "C:\\Users\\rohit\\Documents\\Personal Projects\\BayesOptGPT\\artifacts\\model\\bundle",
+  "champion_study_name": "ag-news-llama-tuning",
+  "champion_trial_number": 1,
+  "checksum_algorithm": "sha256",
+  "created_at": "2026-04-25T00:57:33.935611+00:00",
+  "has_calibration": true,
+  "included_files": [
+    "bundle_metadata.json",
+    "calibration.json",
+    "champion_manifest.json",
+    "checkpoint.ckpt",
+    "checksums.json",
+    "data_config.json",
+    "label_map.json",
+    "model_config.json",
+    "tokenizer/special_tokens_map.json",
+    "tokenizer/tokenizer.json",
+    "tokenizer/tokenizer_config.json",
+    "tokenizer/tokenizer_metadata.json"
+  ],
+  "schema_version": "1.0",
+  "selected_metrics": {
+    "validation_brier": 0.7386578321456909,
+    "validation_ece": 0.026747040450572968,
+    "validation_macro_f1": 0.25880954650634846,
+    "validation_macro_f1_calibrated": 0.25880954650634846,
+    "validation_nll": 1.363754391670227,
+    "validation_nll_calibrated": 1.3589749336242676
+  }
+}

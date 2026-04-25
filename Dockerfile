@@ -18,6 +18,7 @@ COPY pyproject.toml uv.lock README.md /app/
 COPY src /app/src
 COPY scripts /app/scripts
 COPY configs /app/configs
+COPY artifacts/model/bundle /app/artifacts/model/bundle
 
 RUN uv sync --frozen --no-dev
 

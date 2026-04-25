@@ -1,0 +1,12 @@
+{
+  "max_sequence_length": 256,
+  "min_frequency": 2,
+  "model_type": "bpe",
+  "requested_vocab_size": 16000,
+  "special_tokens": {
+    "bos_token": "<bos>",
+    "eos_token": "<eos>",
+    "pad_token": "<pad>",
+    "unk_token": "<unk>"
+  }
+}

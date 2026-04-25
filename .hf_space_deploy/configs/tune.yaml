@@ -1,0 +1,15 @@
+tuning:
+  study_name: ag-news-llama-tuning
+  storage_path: artifacts/tuning/study.db
+  output_dir: artifacts/tuning
+  sampler: tpe
+  pruner: median
+  n_trials: 2
+  timeout_seconds: 1800
+  direction: maximize
+  seed: 42
+  debug_mode: true
+  enable_mlflow: true
+  mlflow_experiment_name: bayes-gp-llmops-tuning
+  enable_temperature_scaling: true
+  log_trial_artifacts: true

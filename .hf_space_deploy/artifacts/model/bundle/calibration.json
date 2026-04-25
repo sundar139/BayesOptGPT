@@ -1,0 +1,9 @@
+{
+  "checkpoint_path": "artifacts\\tuning\\trials\\trial_0001\\checkpoints\\best.ckpt",
+  "enabled": true,
+  "temperature": 0.5766064524650574,
+  "test_nll_after": 1.3936902284622192,
+  "test_nll_before": 1.383737564086914,
+  "validation_nll_after": 1.3589749336242676,
+  "validation_nll_before": 1.363754391670227
+}
