@@ -1,0 +1,22 @@
+project:
+  name: bayes-gp-llmops
+  task: text_classification
+  dataset: ag_news
+
+model:
+  architecture: tiny_llama_classifier
+  vocab_size: 32000
+  max_seq_len: 256
+
+training:
+  batch_size: 32
+  learning_rate: 0.0003
+  epochs: 5
+
+uncertainty:
+  temperature_scaling: true
+  expected_calibration_error: true
+
+tuning:
+  backend: optuna
+  n_trials: 30

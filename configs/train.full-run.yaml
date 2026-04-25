@@ -1,0 +1,16 @@
+training:
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  epochs: 3
+  gradient_clip_norm: 1.0
+  early_stopping_patience: 2
+  mixed_precision: true
+  checkpoint_dir: artifacts/checkpoints
+  random_seed: 42
+  device_preference: cuda
+  log_frequency: 100
+  scheduler: cosine
+  warmup_ratio: 0.05
+  max_train_batches_per_epoch: null
+  max_validation_batches_per_epoch: null
+  max_test_batches_per_epoch: null

@@ -1,0 +1,23 @@
+dataset:
+  name: ag_news
+  config: null
+  text_field: text
+  label_field: label
+  validation_split_ratio: 0.1
+  random_seed: 42
+  debug_subset_size: null
+
+tokenizer:
+  vocab_size: 16000
+  min_frequency: 2
+  max_sequence_length: 256
+
+dataloader:
+  batch_size: 32
+  num_workers: 0
+  pin_memory: false
+
+paths:
+  dataset_cache_dir: data/hf_cache
+  processed_cache_dir: data/processed
+  tokenizer_dir: artifacts/tokenizer

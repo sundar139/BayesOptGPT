@@ -1,0 +1,11 @@
+model:
+  vocab_size: 16000
+  max_sequence_length: 256
+  hidden_size: 256
+  num_layers: 4
+  num_attention_heads: 8
+  feedforward_multiplier: 4.0
+  dropout: 0.1
+  num_classes: 4
+  rope_base: 10000.0
+  pooling: masked_mean
